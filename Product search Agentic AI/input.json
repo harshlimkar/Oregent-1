@@ -1,0 +1,9 @@
+{
+  "query": "smart watch",
+  "filters": {
+    "max_price": 1500,
+    "brand": ["fire bolt", "fastrack"],
+    "rating_min": 4.0
+  },
+  "result_count": 10
+}

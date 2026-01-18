@@ -1,0 +1,13 @@
+{
+  "gaming mouse under 2000": [
+    {
+      "title": "Redgear A-15 Gaming Mouse",
+      "price": 1499,
+      "rating": 4.2,
+      "reviews": ["Good for price", "Smooth tracking"],
+      "link": "https://example.com",
+      "source": "Cache",
+      "confidence": 0.7
+    }
+  ]
+}
