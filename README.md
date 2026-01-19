@@ -1,283 +1,984 @@
 # Oregent-1 Chat Application
 
-A production-ready FastAPI-based chat application that supports multimodal interactions with text and image inputs. Built with conversation intelligence and session management capabilities.
+A simple FastAPI-based chat application that allows users to send text messages and upload images for analysis.
 
 ## 📋 Table of Contents
 
-- [Features](#features)
-- [Architecture](#architecture)
+- [What This App Does](#what-this-app-does)
+- [Product Search Agentic AI System](#product-search-agentic-ai-system)
+  - [System Overview](#system-overview)
+  - [Complete Architecture](#complete-architecture)
+  - [Agent Components](#agent-components)
+  - [How It All Works Together](#how-it-all-works-together)
+  - [Data Flow](#data-flow)
+  - [File-by-File Breakdown](#file-by-file-breakdown)
+- [System Architecture](#system-architecture)
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
-- [Configuration](#configuration)
-- [API Documentation](#api-documentation)
-- [Usage Examples](#usage-examples)
-- [Project Structure](#project-structure)
-- [Error Handling](#error-handling)
-- [Security Considerations](#security-considerations)
-- [Performance](#performance)
-- [Testing](#testing)
-- [Deployment](#deployment)
-- [Troubleshooting](#troubleshooting)
-- [Contributing](#contributing)
-- [License](#license)
+- [How to Run](#how-to-run)
+- [How to Use](#how-to-use)
+- [API Endpoint](#api-endpoint)
+- [File Structure](#file-structure)
+- [Understanding the Code](#understanding-the-code)
 
-## ✨ Features
+## What This App Does
 
-- 💬 **Text-based Chat**: Process natural language queries
-- 🖼️ **Image Upload Support**: Handle image inputs with automatic file management
-- 🔄 **Session Management**: Maintain conversation context across multiple requests
-- 🤖 **AI-Powered Agent**: Integration with intelligent conversation agent
-- 📁 **Automatic File Storage**: Secure file handling with UUID-based naming
-- 🚀 **Async Support**: Built on FastAPI's async architecture for high performance
-- 📝 **Auto-generated API Docs**: Interactive documentation at `/docs` and `/redoc`
-- 🔒 **Type Safety**: Full type hints for better code quality
+This application is a simple chat server built with FastAPI. It does three main things:
 
-## 🏗️ Architecture
+1. **Accepts text messages** - Users can send a message and get a response from an AI agent
+2. **Handles image uploads** - Users can optionally attach an image with their message
+3. **Manages conversations** - Each conversation can have a unique session ID to keep messages organized
+
+## Product Search Agentic AI System
+
+### System Overview
+
+This application implements an **Agentic AI system** for product search and recommendation. Unlike simple chatbots, this system uses specialized AI agents that can:
+
+- 🔍 **Search products** across e-commerce platforms
+- 🤖 **Make decisions** about which tools to use
+- 🧠 **Process images** to understand what users are looking for
+- 💬 **Have conversations** while maintaining context
+- 🎯 **Take actions** like searching APIs, analyzing data, and formatting responses
+
+### Complete Architecture
 
 ```
-┌─────────────┐
-│   Client    │
-└──────┬──────┘
-       │ HTTP POST
-       ▼
-┌─────────────────────────┐
-│   FastAPI Server        │
-│   ┌─────────────────┐   │
-│   │ /chat endpoint  │   │
-│   └────────┬────────┘   │
-│            │             │
-│   ┌────────▼────────┐   │
-│   │ File Handler    │   │
-│   └────────┬────────┘   │
-│            │             │
-│   ┌────────▼────────┐   │
-│   │ Conversation    │   │
-│   │     Agent       │   │
-│   └────────┬────────┘   │
-└───────────┬─────────────┘
-            │
-            ▼
-     ┌─────────────┐
-     │  Response   │
-     └─────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           USER LAYER                                     │
+│                                                                          │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐             │
+│  │   Browser    │    │  Mobile App  │    │ API Client   │             │
+│  │   (Swagger)  │    │              │    │  (curl/code) │             │
+│  └──────┬───────┘    └──────┬───────┘    └──────┬───────┘             │
+│         │                   │                    │                      │
+│         └───────────────────┴────────────────────┘                      │
+│                             │                                           │
+│                    HTTP POST /chat                                      │
+│              (text + optional image + session_id)                       │
+└─────────────────────────────┬───────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                      FASTAPI SERVER (main.py)                           │
+│                                                                          │
+│  ┌────────────────────────────────────────────────────────────┐        │
+│  │  1. Request Handler                                         │        │
+│  │     - Receives: user_input, session_id, image (optional)   │        │
+│  │     - Validates input                                       │        │
+│  │     - Generates unique session_id if not provided          │        │
+│  └────────────────────┬───────────────────────────────────────┘        │
+│                       │                                                 │
+│                       ▼                                                 │
+│  ┌────────────────────────────────────────────────────────────┐        │
+│  │  2. Image Handler (if image exists)                        │        │
+│  │     - Creates unique filename (UUID + original name)       │        │
+│  │     - Saves to uploads/ folder                             │        │
+│  │     - Stores file path                                     │        │
+│  └────────────────────┬───────────────────────────────────────┘        │
+│                       │                                                 │
+│                       ▼                                                 │
+│  ┌────────────────────────────────────────────────────────────┐        │
+│  │  3. Agent Caller                                            │        │
+│  │     - Calls conversation_agent()                            │        │
+│  │     - Passes: user_input, image_path (or None)             │        │
+│  └────────────────────┬───────────────────────────────────────┘        │
+└────────────────────────┼───────────────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│              AGENTIC AI LAYER (conversation_agent.py)                   │
+│                                                                          │
+│  ┌──────────────────────────────────────────────────────────┐          │
+│  │           Main Orchestrator Agent                         │          │
+│  │  - Receives user input and optional image                │          │
+│  │  - Decides which specialized agent to use                │          │
+│  │  - Coordinates the workflow                              │          │
+│  │  - Maintains conversation context                        │          │
+│  └────────┬─────────────────────────────────────────────────┘          │
+│           │                                                             │
+│           ├─────────────┬─────────────┬─────────────┬─────────────┐   │
+│           │             │             │             │             │   │
+│           ▼             ▼             ▼             ▼             ▼   │
+│  ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌──────────┐ ┌────────┐│
+│  │   Image    │ │  Product   │ │   Search   │ │  Price   │ │ Review ││
+│  │  Analysis  │ │ Extraction │ │   Engine   │ │ Compare  │ │ Analyst││
+│  │   Agent    │ │   Agent    │ │   Agent    │ │  Agent   │ │ Agent  ││
+│  └────────────┘ └────────────┘ └────────────┘ └──────────┘ └────────┘│
+│       │              │              │              │            │      │
+│       └──────────────┴──────────────┴──────────────┴────────────┘      │
+│                                │                                        │
+│                                ▼                                        │
+│  ┌──────────────────────────────────────────────────────────┐          │
+│  │              Response Formatter                           │          │
+│  │  - Combines results from all agents                      │          │
+│  │  - Formats into user-friendly response                   │          │
+│  │  - Returns: {"response": "...", "metadata": {...}}      │          │
+│  └────────────────────────────────────────────────────────┬─┘          │
+└─────────────────────────────────────────────────────────────┼───────────┘
+                                                              │
+                         ┌────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    EXTERNAL SERVICES LAYER                              │
+│                                                                          │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌────────────┐ │
+│  │   Amazon     │  │    eBay      │  │  Google      │  │   Image    │ │
+│  │   Product    │  │   Shopping   │  │   Shopping   │  │  Analysis  │ │
+│  │   API        │  │     API      │  │     API      │  │    API     │ │
+│  └──────────────┘  └──────────────┘  └──────────────┘  └────────────┘ │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+                         │
+                         │ Results aggregated
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                      RESPONSE FLOW BACK                                 │
+│                                                                          │
+│  conversation_agent returns to main.py                                  │
+│           │                                                             │
+│           ▼                                                             │
+│  main.py adds session_id to response                                   │
+│           │                                                             │
+│           ▼                                                             │
+│  JSON response sent back to user                                       │
+│           │                                                             │
+│           ▼                                                             │
+│  ┌─────────────────────────────────────┐                               │
+│  │  {                                  │                               │
+│  │    "response": "Found 5 products...",                               │
+│  │    "session_id": "user123",         │                               │
+│  │    "products": [...],               │                               │
+│  │    "metadata": {...}                │                               │
+│  │  }                                  │                               │
+│  └─────────────────────────────────────┘                               │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Components
+### Agent Components
 
-1. **FastAPI Server** (`main.py`)
-   - Handles HTTP requests
-   - Manages file uploads
-   - Routes requests to conversation agent
+#### 1. **Main Orchestrator Agent** (`conversation_agent.py`)
 
-2. **Conversation Agent** (`conversation_agent.py`)
-   - Processes user input
-   - Handles image analysis
-   - Maintains conversation context
+**What it does:**
+- Acts as the "brain" of the system
+- Decides which specialized agent to activate
+- Maintains conversation history
+- Coordinates between different agents
 
-3. **Upload Directory** (`uploads/`)
-   - Stores uploaded images
-   - Uses UUID naming for uniqueness
-   - Automatically created on startup
+**Example Flow:**
+```python
+User: "Find me a laptop under $1000"
+↓
+Orchestrator decides: Need Product Search Agent
+↓
+Product Search Agent activates
+↓
+Results returned and formatted
+```
 
-## 📦 Prerequisites
+#### 2. **Image Analysis Agent**
 
-- Python 3.7 or higher
-- pip (Python package manager)
-- Virtual environment (recommended)
-- 500MB free disk space (for uploads)
+**Purpose:** Understands what's in uploaded images
 
-## 🚀 Installation
+**Process:**
+```
+Image uploaded (e.g., photo of a shoe)
+        ↓
+1. Image saved to uploads/ folder
+        ↓
+2. Image Analysis Agent receives path
+        ↓
+3. AI analyzes image:
+   - Identifies objects ("Nike running shoe")
+   - Extracts colors ("red and white")
+   - Detects text/brands
+   - Determines style/category
+        ↓
+4. Returns structured data:
+   {
+     "detected_object": "athletic shoe",
+     "brand": "Nike",
+     "colors": ["red", "white"],
+     "style": "running shoe"
+   }
+```
 
-### 1. Clone the Repository
+**Use Cases:**
+- "Find products similar to this image"
+- "What is this item?"
+- "Compare prices for this product"
 
+#### 3. **Product Extraction Agent**
+
+**Purpose:** Extracts specific product details from text
+
+**Process:**
+```
+User input: "I need wireless headphones with noise cancellation"
+        ↓
+Product Extraction Agent analyzes:
+        ↓
+Extracted Information:
+{
+  "product_type": "headphones",
+  "features": ["wireless", "noise cancellation"],
+  "category": "electronics",
+  "subcategory": "audio"
+}
+```
+
+#### 4. **Search Engine Agent**
+
+**Purpose:** Queries external e-commerce APIs
+
+**Workflow:**
+```
+                    Search Engine Agent
+                            ↓
+        ┌───────────────────┼───────────────────┐
+        │                   │                   │
+        ▼                   ▼                   ▼
+   Amazon API          eBay API         Google Shopping
+        │                   │                   │
+        ↓                   ↓                   ↓
+  5 Products          8 Products          3 Products
+        │                   │                   │
+        └───────────────────┴───────────────────┘
+                            ↓
+                    Aggregated Results
+                      (16 products)
+                            ↓
+                    Filtered & Sorted
+                            ↓
+                    Top 10 Returned
+```
+
+**Search Parameters:**
+- Keywords from user input
+- Price range
+- Category
+- Ratings threshold
+- Availability
+
+#### 5. **Price Comparison Agent**
+
+**Purpose:** Analyzes prices across platforms
+
+**Process:**
+```
+Product: "iPhone 15 Pro"
+        ↓
+Finds same product on multiple sites
+        ↓
+┌─────────────┬─────────────┬─────────────┐
+│   Amazon    │     eBay    │   Walmart   │
+│   $999      │    $1,049   │    $979     │
+└─────────────┴─────────────┴─────────────┘
+        ↓
+Recommends: Walmart ($979) - Best price!
+        ↓
+Also shows: Price history, deals, shipping costs
+```
+
+#### 6. **Review Analysis Agent**
+
+**Purpose:** Summarizes and analyzes product reviews
+
+**Process:**
+```
+Collects reviews from multiple sources
+        ↓
+Analyzes sentiment (positive/negative)
+        ↓
+Extracts common themes:
+  ✓ Pros: Battery life, Camera quality
+  ✗ Cons: Expensive, Heavy
+        ↓
+Calculates overall score
+        ↓
+Returns summary
+```
+
+### How It All Works Together
+
+#### **Example 1: Text-Only Search**
+
+```
+User → "Find gaming laptops under $1500"
+  ↓
+main.py receives request
+  ↓
+conversation_agent.py activated
+  ↓
+Main Orchestrator analyzes request:
+  - Detects: product search query
+  - Identifies: price constraint
+  - Category: electronics/laptops
+  ↓
+Activates Product Extraction Agent
+  ↓ 
+Extracts:
+  {
+    "product": "gaming laptop",
+    "max_price": 1500,
+    "category": "computers"
+  }
+  ↓
+Activates Search Engine Agent
+  ↓
+Searches 3 e-commerce APIs in parallel
+  ↓
+Returns 25 results
+  ↓
+Price Comparison Agent filters:
+  - Only laptops ≤ $1500
+  - Sorts by: rating, reviews, price
+  ↓
+Review Analysis Agent summarizes top 5
+  ↓
+Response formatted:
+  "Found 5 gaming laptops under $1500:
+   1. ASUS ROG - $1,299 ⭐4.5/5
+      Pros: Great GPU, Fast refresh rate
+   2. Dell G15 - $1,199 ⭐4.3/5
+      Pros: Good value, Solid build
+   ..."
+  ↓
+Returned to user via main.py
+```
+
+#### **Example 2: Image-Based Search**
+
+```
+User uploads image of a watch + "Find similar watches"
+  ↓
+main.py receives image file
+  ↓
+Image saved: uploads/abc123_watch.jpg
+  ↓
+conversation_agent.py activated with image_path
+  ↓
+Main Orchestrator detects image + text query
+  ↓
+Activates Image Analysis Agent
+  ↓
+Image Analysis Agent processes image:
+  ↓
+Detects:
+  {
+    "object": "wristwatch",
+    "style": "sports/chronograph",
+    "brand": "Casio G-Shock",
+    "color": "black",
+    "features": ["digital display", "rubber strap"]
+  }
+  ↓
+Activates Product Extraction Agent
+  ↓
+Combines image data + user text:
+  Search query: "Casio G-Shock style sports watch black"
+  ↓
+Activates Search Engine Agent
+  ↓
+Searches for similar products
+  ↓
+Returns matching watches
+  ↓
+Price Comparison sorts by similarity + price
+  ↓
+Response:
+  "Found watches similar to your image:
+   1. Casio G-Shock GA2100 - $99
+   2. Similar style from Timex - $79
+   ..."
+  ↓
+Returned to user
+```
+
+#### **Example 3: Complex Multi-Turn Conversation**
+
+```
+Turn 1:
+User → "I need running shoes"
+  ↓
+Agent searches, returns 10 options
+  ↓
+Response: "Here are 10 running shoes..."
+
+Turn 2: (Same session_id)
+User → "Show me only Nike ones under $100"
+  ↓
+Orchestrator uses conversation history
+  ↓
+Knows context: already searched running shoes
+  ↓
+Filters previous results:
+  - Brand: Nike
+  - Price: < $100
+  ↓
+Response: "From the previous results, 3 Nike shoes under $100..."
+
+Turn 3:
+User uploads image → "Which one looks like this?"
+  ↓
+Image Analysis Agent + Previous context
+  ↓
+Compares uploaded image to the 3 Nike shoes
+  ↓
+Response: "The Nike Air Zoom Pegasus matches your image most closely..."
+```
+
+### Data Flow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    DETAILED DATA FLOW                           │
+└─────────────────────────────────────────────────────────────────┘
+
+Step 1: User Input Capture
+┌──────────────────────────────────────┐
+│  User sends:                         │
+│  {                                   │
+│    "user_input": "Find red shoes",   │
+│    "session_id": "user123",          │
+│    "image": <file object>            │
+│  }                                   │
+└────────────────┬─────────────────────┘
+                 │
+                 ▼
+Step 2: FastAPI Processing (main.py)
+┌──────────────────────────────────────┐
+│  if image exists:                    │
+│    filename = uuid4() + image.name   │
+│    path = f"uploads/{filename}"      │
+│    save_image(path)                  │
+│                                      │
+│  image_path = path or None           │
+└────────────────┬─────────────────────┘
+                 │
+                 ▼
+Step 3: Agent Invocation
+┌──────────────────────────────────────┐
+│  response = conversation_agent(      │
+│    user_input="Find red shoes",      │
+│    image_path="uploads/abc.jpg"      │
+│  )                                   │
+└────────────────┬─────────────────────┘
+                 │
+                 ▼
+Step 4: Agent Processing
+┌──────────────────────────────────────────────────────┐
+│  Orchestrator receives input                         │
+│          ↓                                           │
+│  Analyzes: "Find red shoes" + image                 │
+│          ↓                                           │
+│  Decision Tree:                                      │
+│  - Has image? YES → Activate Image Agent            │
+│  - Is search query? YES → Activate Search Agent     │
+│  - Needs comparison? NO                              │
+│          ↓                                           │
+│  Parallel Execution:                                 │
+│  ┌─────────────────┐  ┌─────────────────┐          │
+│  │ Image Analysis  │  │ Text Processing │          │
+│  │ "red athletic   │  │ "shoes, red"    │          │
+│  │  shoe detected" │  │                 │          │
+│  └────────┬────────┘  └────────┬────────┘          │
+│           └──────────┬──────────┘                   │
+│                      ▼                               │
+│           Combined Query Built:                      │
+│           "red athletic shoes"                       │
+│                      ↓                               │
+│           Search Engine Agent                        │
+│                      ↓                               │
+│           API Calls (Amazon, eBay, etc.)            │
+│                      ↓                               │
+│           Results Aggregated                         │
+│                      ↓                               │
+│           Filtered & Ranked                          │
+└──────────────────────┬───────────────────────────────┘
+                       │
+                       ▼
+Step 5: Response Formation
+┌──────────────────────────────────────┐
+│  response_data = {                   │
+│    "response": "Found 8 red shoes:", │
+│    "products": [                     │
+│      {                               │
+│        "name": "Nike Air Max",       │
+│        "price": "$120",              │
+│        "rating": 4.5,                │
+│        "url": "..."                  │
+│      },                              │
+│      ...                             │
+│    ],                                │
+│    "metadata": {                     │
+│      "search_time": "0.8s",          │
+│      "sources": 3                    │
+│    }                                 │
+│  }                                   │
+└────────────────┬─────────────────────┘
+                 │
+                 ▼
+Step 6: Final Response (main.py)
+┌──────────────────────────────────────┐
+│  response_data["session_id"] =       │
+│    "user123"                         │
+│                                      │
+│  return JSONResponse(response_data)  │
+└────────────────┬─────────────────────┘
+                 │
+                 ▼
+Step 7: User Receives
+┌──────────────────────────────────────┐
+│  {                                   │
+│    "response": "Found 8 red shoes:", │
+│    "products": [...],                │
+│    "metadata": {...},                │
+│    "session_id": "user123"           │
+│  }                                   │
+└──────────────────────────────────────┘
+```
+
+### File-by-File Breakdown
+
+#### **main.py** - The Gateway
+
+```
+Purpose: HTTP server that handles all incoming requests
+
+Key Functions:
+├─ app = FastAPI()
+│  └─ Creates the web server
+│
+├─ @app.post("/chat")
+│  └─ The main endpoint
+│     │
+│     ├─ Receives: user_input, session_id, image
+│     │
+│     ├─ If image exists:
+│     │  ├─ Generate UUID filename
+│     │  ├─ Save to uploads/
+│     │  └─ Store path
+│     │
+│     ├─ Call conversation_agent()
+│     │  └─ Pass user_input + image_path
+│     │
+│     ├─ Receive response from agent
+│     │
+│     ├─ Add session_id to response
+│     │
+│     └─ Return JSON response
+│
+└─ File Management:
+   └─ Creates "uploads/" folder on startup
+
+Flow:
+  Request → Validate → Save Image → Call Agent → Format → Response
+```
+
+#### **conversation_agent.py** - The AI Brain
+
+```
+Purpose: Contains all AI agent logic and coordination
+
+Structure:
+├─ conversation_agent(user_input, image_path=None)
+│  │
+│  ├─ Main Orchestrator
+│  │  ├─ Analyzes user input
+│  │  ├─ Determines intent
+│  │  ├─ Decides which agents to activate
+│  │  └─ Coordinates workflow
+│  │
+│  ├─ Agent Functions:
+│  │  │
+│  │  ├─ analyze_image(image_path)
+│  │  │  └─ Processes image, returns object details
+│  │  │
+│  │  ├─ extract_product_info(text)
+│  │  │  └─ Parses text for product details
+│  │  │
+│  │  ├─ search_products(query, filters)
+│  │  │  └─ Calls external APIs, aggregates results
+│  │  │
+│  │  ├─ compare_prices(product_list)
+│  │  │  └─ Analyzes prices across platforms
+│  │  │
+│  │  └─ analyze_reviews(product_id)
+│  │     └─ Summarizes customer reviews
+│  │
+│  └─ Response Builder
+│     ├─ Combines results from all agents
+│     ├─ Formats user-friendly response
+│     └─ Returns dictionary
+│
+└─ Helper Functions:
+   ├─ format_results()
+   ├─ rank_products()
+   └─ maintain_context()
+
+Agent Decision Logic:
+┌─────────────────────────────────────┐
+│ IF user_input contains:             │
+│   - "find", "search" → Search Agent │
+│   - image_path exists → Image Agent │
+│   - "compare", "price" → Price Agent│
+│   - "reviews" → Review Agent        │
+│                                     │
+│ Can activate multiple agents        │
+│ simultaneously for complex queries  │
+└─────────────────────────────────────┘
+```
+
+#### **uploads/** - Storage Directory
+
+```
+Purpose: Stores all uploaded images
+
+Structure:
+uploads/
+  ├─ <uuid>_image1.jpg     ← User uploaded "image1.jpg"
+  ├─ <uuid>_photo.png      ← User uploaded "photo.png"
+  ├─ <uuid>_product.webp   ← User uploaded "product.webp"
+  └─ ...
+
+Naming Convention:
+  <randomly-generated-uuid>_<original-filename>
+
+Example:
+  550e8400-e29b-41d4-a716-446655440000_sneakers.jpg
+
+Why UUIDs?
+  ✓ Prevents filename collisions
+  ✓ Unique even if same filename uploaded twice
+  ✓ Secure - hard to guess other images
+
+Lifecycle:
+  1. Image uploaded
+  2. UUID generated
+  3. File saved with UUID prefix
+  4. Path passed to agent
+  5. Agent reads and processes
+  6. File remains for future reference
+```
+
+### Agent Interaction Patterns
+
+#### **Pattern 1: Sequential Processing**
+
+```
+User query: "Find laptops"
+     ↓
+Extract Intent → Search Products → Format Response
+     ↓                ↓                  ↓
+  (Done)          (Done)             (Return)
+```
+
+#### **Pattern 2: Parallel Processing**
+
+```
+User query + Image: "Find similar products"
+          ↓
+    ┌─────┴─────┐
+    ↓           ↓
+Image Agent   Text Agent
+    ↓           ↓
+    └─────┬─────┘
+          ↓
+    Merge Results
+          ↓
+    Search Agent
+          ↓
+       Response
+```
+
+#### **Pattern 3: Iterative Refinement**
+
+```
+User: "Find shoes"
+  ↓
+Initial Search (100 results)
+  ↓
+User: "Only running shoes"
+  ↓
+Filter Previous Results (30 results)
+  ↓
+User: "Under $100"
+  ↓
+Further Filtering (8 results)
+  ↓
+Final Response
+```
+
+### Memory and Context Management
+
+```
+┌──────────────────────────────────────────────────┐
+│         Session-Based Context Storage            │
+├──────────────────────────────────────────────────┤
+│                                                  │
+│  session_id: "user123"                          │
+│    ├─ conversation_history: [...]               │
+│    ├─ last_search_results: [...]                │
+│    ├─ user_preferences: {...}                   │
+│    └─ context: {                                │
+│         "current_category": "electronics",       │
+│         "price_range": [0, 1000],               │
+│         "filters_applied": [...]                │
+│       }                                         │
+│                                                  │
+│  session_id: "user456"                          │
+│    ├─ conversation_history: [...]               │
+│    ├─ ...                                       │
+│                                                  │
+└──────────────────────────────────────────────────┘
+
+How Context is Used:
+  - Remembers previous searches
+  - Understands follow-up questions
+  - Applies cumulative filters
+  - Personalizes recommendations
+```
+
+### Real-World Example: Complete Flow
+
+```
+🎯 Scenario: User wants to buy a camera
+
+Turn 1: User → "I want to buy a camera for photography"
+        ↓
+   [Main Orchestrator Analysis]
+        ↓
+   Intent: product_search
+   Category: electronics/cameras
+   Purpose: photography
+        ↓
+   [Product Extraction Agent]
+        ↓
+   Extracted: {
+     "product": "camera",
+     "use_case": "photography",
+     "category": "electronics"
+   }
+        ↓
+   [Search Engine Agent] → Queries APIs
+        ↓
+   Found: 45 cameras
+        ↓
+   [Review Analysis Agent] → Filters by ratings
+        ↓
+   Top 10 cameras with good photography reviews
+        ↓
+   Response: "I found 10 great cameras for photography.
+             Here are the top-rated ones:
+             1. Canon EOS R6 - $2,499 ⭐4.8/5
+             2. Sony A7 IV - $2,498 ⭐4.7/5
+             ..."
+
+Turn 2: User → "That's too expensive. Show me under $1000"
+        ↓
+   [Orchestrator + Context]
+        ↓
+   Remembers: Previous search was for cameras
+   New constraint: price < $1000
+        ↓
+   [Price Comparison Agent]
+        ↓
+   Filters previous 45 results by price
+        ↓
+   Found: 12 cameras under $1,000
+        ↓
+   Response: "Here are 12 cameras under $1,000:
+             1. Canon EOS M50 - $699 ⭐4.5/5
+             2. Sony A6400 - $898 ⭐4.6/5
+             ..."
+
+Turn 3: User uploads image of Canon camera →
+        "Is this one good?"
+        ↓
+   [Image Analysis Agent]
+        ↓
+   Detects: Canon EOS Rebel T7
+        ↓
+   [Search in previous results]
+        ↓
+   Found: Canon EOS Rebel T7 was #5 in list
+        ↓
+   [Review Analysis Agent]
+        ↓
+   Analyzes reviews for this specific model
+        ↓
+   Response: "Yes! The Canon EOS Rebel T7 ($549) is great
+             for beginners. Reviews say:
+             ✓ Easy to use
+             ✓ Good image quality
+             ✗ Limited video features
+             ⭐ 4.4/5 from 2,341 reviews
+             
+             It's currently available at:
+             - Amazon: $549
+             - B&H Photo: $559
+             - Best Buy: $579"
+```
+
+## System Architecture
+
+Here's how the entire system works together:
+
+```
+┌──────────────────┐
+│   User/Client    │
+│  (Browser, App,  │
+│   or Script)     │
+└────────┬─────────┘
+         │
+         │ Sends message + optional image
+         │ (HTTP POST request)
+         │
+         ▼
+┌──────────────────────────────┐
+│   FastAPI Server (main.py)   │
+│                              │
+│  1. Receives the request     │
+│  2. Checks if image exists   │
+│  3. Saves image to disk      │
+│  4. Calls AI Agent           │
+│  5. Adds session ID          │
+│  6. Returns response         │
+└──────────────┬───────────────┘
+               │
+               │ File path (if image)
+               │
+               ▼
+      ┌────────────────┐
+      │  uploads/      │
+      │  folder        │
+      │  (saved images)│
+      └────────────────┘
+               │
+               │ User input + Image path
+               │
+               ▼
+┌──────────────────────────────────┐
+│ Conversation Agent               │
+│ (conversation_agent.py)          │
+│                                  │
+│ 1. Receives user message         │
+│ 2. Receives image path (if any)  │
+│ 3. Analyzes/processes both       │
+│ 4. Generates AI response         │
+│ 5. Returns response text         │
+└──────────────┬───────────────────┘
+               │
+               │ Response dictionary
+               │
+               ▼
+┌──────────────────────────────┐
+│   FastAPI Server (main.py)   │
+│   Adds session_id to response│
+└──────────────┬───────────────┘
+               │
+               │ JSON response
+               │
+               ▼
+┌──────────────────┐
+│   User/Client    │
+│ Receives answer  │
+└──────────────────┘
+```
+
+## Prerequisites
+
+You need:
+- Python 3.7 or higher installed on your computer
+- pip (comes with Python)
+- A terminal/command prompt to run commands
+
+## Installation
+
+### Step 1: Get the code
+Open your terminal and run:
 ```bash
 git clone <repository-url>
 cd Oregent-1
 ```
 
-### 2. Create Virtual Environment
+### Step 2: Create a virtual environment (optional but recommended)
 
-**Windows:**
+**On Windows:**
 ```bash
 python -m venv venv
 venv\Scripts\activate
 ```
 
-**Linux/Mac:**
+**On Mac/Linux:**
 ```bash
 python3 -m venv venv
 source venv/bin/activate
 ```
 
-### 3. Install Dependencies
-
+### Step 3: Install required packages
 ```bash
-pip install -r requirements.txt
+pip install fastapi uvicorn python-multipart
 ```
 
-Or install manually:
+These packages do:
+- **fastapi** - The web server framework
+- **uvicorn** - The server that runs FastAPI
+- **python-multipart** - Allows sending files with forms
+
+## How to Run
+
+Start the server with this command:
 ```bash
-pip install fastapi uvicorn python-multipart pillow anthropic
+uvicorn main:app --reload
 ```
 
-### 4. Set Up Environment Variables
-
-Create a `.env` file in the project root:
-
-```env
-# API Keys
-ANTHROPIC_API_KEY=your_api_key_here
-OPENAI_API_KEY=your_openai_key_here
-
-# Server Configuration
-HOST=0.0.0.0
-PORT=8000
-RELOAD=true
-
-# Upload Configuration
-UPLOAD_DIR=uploads
-MAX_UPLOAD_SIZE=10485760  # 10MB in bytes
-
-# Session Configuration
-SESSION_TIMEOUT=3600  # 1 hour in seconds
+You should see something like:
+```
+INFO:     Uvicorn running on http://127.0.0.1:8000
 ```
 
-### 5. Run the Application
+The `--reload` flag makes the server restart when you edit the code. Remove it for production.
 
-**Development Mode:**
-```bash
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
-```
+## How to Use
 
-**Production Mode:**
-```bash
-uvicorn main:app --workers 4 --host 0.0.0.0 --port 8000
-```
+### Method 1: Using your browser (Swagger UI)
 
-The server will start at `http://localhost:8000`
+1. Open http://localhost:8000/docs in your browser
+2. Click on the "POST /chat" section to expand it
+3. Click "Try it out"
+4. Fill in:
+   - user_input: Your message
+   - session_id: A name for this conversation (optional)
+   - image: Upload an image (optional)
+5. Click "Execute"
 
-Access interactive API documentation:
-- Swagger UI: `http://localhost:8000/docs`
-- ReDoc: `http://localhost:8000/redoc`
+### Method 2: Using curl in terminal
 
-## ⚙️ Configuration
-
-### Upload Settings
-
-Modify upload directory in `main.py`:
-
-```python
-UPLOAD_DIR = "uploads"  # Change to your preferred directory
-MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB limit
-ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
-```
-
-### CORS Configuration
-
-Add CORS middleware for web applications:
-
-```python
-from fastapi.middleware.cors import CORSMiddleware
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-```
-
-## 📚 API Documentation
-
-### Endpoint: POST /chat
-
-Process a chat message with optional image attachment.
-
-**URL:** `/chat`
-
-**Method:** `POST`
-
-**Content-Type:** `multipart/form-data`
-
-**Parameters:**
-```json
-{
-  "user_input": "Hello, how are you?",
-  "session_id": "user123",
-  "image": "image.jpg"
-}
-```
-
-**Response:**
-```json
-{
-  "response": "string",
-  "session_id": "string",
-  "timestamp": "ISO8601 datetime",
-  "tokens_used": "integer",
-  "image_processed": "boolean"
-}
-```
-
-**Status Codes:**
-- `200 OK`: Request processed successfully
-- `400 Bad Request`: Invalid input or file format
-- `413 Payload Too Large`: File exceeds size limit
-- `422 Unprocessable Entity`: Validation error
-- `500 Internal Server Error`: Server error
-
-**Example Success Response:**
-```json
-{
-  "response": "I can see a beautiful sunset in the image. The sky is painted with vibrant orange and pink hues.",
-  "session_id": "user123",
-  "timestamp": "2024-01-15T10:30:00Z",
-  "tokens_used": 150,
-  "image_processed": true
-}
-```
-
-**Example Error Response:**
-```json
-{
-  "detail": "File size exceeds maximum allowed size of 10MB"
-}
-```
-
-## 💻 Usage Examples
-
-### Using cURL
-
-**Text-only Message:**
+**Send just a message:**
 ```bash
 curl -X POST "http://localhost:8000/chat" \
   -F "user_input=Hello, how are you?" \
-  -F "session_id=user123"
+  -F "session_id=myconversation"
 ```
 
-**Message with Image:**
+**Send a message with an image:**
 ```bash
 curl -X POST "http://localhost:8000/chat" \
   -F "user_input=What's in this image?" \
-  -F "session_id=user123" \
-  -F "image=@/path/to/image.jpg"
+  -F "session_id=myconversation" \
+  -F "image=@/path/to/your/image.jpg"
 ```
 
-**With Custom Headers:**
-```bash
-curl -X POST "http://localhost:8000/chat" \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -F "user_input=Analyze this" \
-  -F "image=@image.png"
-```
+### Method 3: Using Python
 
-### Using Python Requests
-
-**Basic Example:**
 ```python
 import requests
 
+# Send a message
 response = requests.post(
     "http://localhost:8000/chat",
     data={
@@ -286,14 +987,17 @@ response = requests.post(
     }
 )
 
-print(response.json())
+# Get the answer
+result = response.json()
+print(result["response"])
+print(result["session_id"])
 ```
 
-**With Image Upload:**
+**With an image:**
 ```python
 import requests
 
-with open("image.jpg", "rb") as f:
+with open("myimage.jpg", "rb") as f:
     response = requests.post(
         "http://localhost:8000/chat",
         data={
@@ -304,551 +1008,145 @@ with open("image.jpg", "rb") as f:
     )
 
 result = response.json()
-print(f"Response: {result['response']}")
-print(f"Session ID: {result['session_id']}")
+print(result["response"])
 ```
 
-**Complete Application:**
-```python
-import requests
-from pathlib import Path
+## API Endpoint
 
-class ChatClient:
-    def __init__(self, base_url="http://localhost:8000"):
-        self.base_url = base_url
-        self.session_id = None
-    
-    def chat(self, message, image_path=None):
-        data = {"user_input": message}
-        
-        if self.session_id:
-            data["session_id"] = self.session_id
-        
-        files = None
-        if image_path:
-            files = {"image": open(image_path, "rb")}
-        
-        try:
-            response = requests.post(
-                f"{self.base_url}/chat",
-                data=data,
-                files=files
-            )
-            response.raise_for_status()
-            
-            result = response.json()
-            self.session_id = result.get("session_id")
-            
-            return result
-        finally:
-            if files:
-                files["image"].close()
+### The `/chat` Endpoint
 
-# Usage
-client = ChatClient()
+**What it does:** Accepts a message and optional image, returns an AI response
 
-# Text message
-response = client.chat("Hello!")
-print(response["response"])
+**How to call it:**
+- URL: `http://localhost:8000/chat`
+- Method: `POST`
+- Type: `form-data` (can include files)
 
-# Message with image
-response = client.chat("What's in this image?", "photo.jpg")
-print(response["response"])
-```
-
-### Using JavaScript/TypeScript
-
-**With Fetch API:**
-```javascript
-async function sendChat(message, imageFile = null, sessionId = "default") {
-    const formData = new FormData();
-    formData.append("user_input", message);
-    formData.append("session_id", sessionId);
-    
-    if (imageFile) {
-        formData.append("image", imageFile);
-    }
-    
-    const response = await fetch("http://localhost:8000/chat", {
-        method: "POST",
-        body: formData
-    });
-    
-    return await response.json();
-}
-
-// Usage
-const result = await sendChat("Hello!");
-console.log(result.response);
-
-// With image
-const fileInput = document.querySelector("#imageInput");
-const file = fileInput.files[0];
-const result = await sendChat("Analyze this", file, "user123");
-```
-
-**With Axios:**
-```javascript
-import axios from 'axios';
-
-async function sendChat(message, imageFile = null) {
-    const formData = new FormData();
-    formData.append("user_input", message);
-    formData.append("session_id", "user123");
-    
-    if (imageFile) {
-        formData.append("image", imageFile);
-    }
-    
-    const response = await axios.post(
-        "http://localhost:8000/chat",
-        formData,
-        {
-            headers: {
-                "Content-Type": "multipart/form-data"
-            }
-        }
-    );
-    
-    return response.data;
+**What you send:**
+```json
+{
+  "user_input": "Hello, who are you?",
+  "session_id": "user123",
+  "image": "image.jpg"
 }
 ```
 
-### Using Postman
+**What you get back:**
+```json
+{
+  "response": "The AI's answer to your message",
+  "session_id": "user123"
+}
+```
 
-1. **Set Method:** POST
-2. **URL:** `http://localhost:8000/chat`
-3. **Body Tab:** Select "form-data"
-4. **Add Fields:**
-   - Key: `user_input`, Type: Text, Value: Your message
-   - Key: `session_id`, Type: Text, Value: Your session ID
-   - Key: `image`, Type: File, Value: Select image file
-5. **Click Send**
+## File Structure
 
-## 📁 Project Structure
+Here's what each file does:
 
 ```
 Oregent-1/
-├── main.py                      # FastAPI application entry point
-├── conversation_agent.py        # AI conversation agent logic
-├── requirements.txt             # Python dependencies
-├── .env                         # Environment variables (create this)
-├── .gitignore                   # Git ignore file
-├── README.md                    # This file
-├── uploads/                     # Directory for uploaded images
-│   └── .gitkeep                 # Keep directory in git
-├── tests/                       # Test files
-│   ├── __init__.py
-│   ├── test_main.py
-│   └── test_conversation_agent.py
-├── docs/                        # Additional documentation
-│   ├── architecture.md
-│   └── api-examples.md
-└── scripts/                     # Utility scripts
-    ├── setup.sh
-    └── deploy.sh
+├── main.py                      
+│   └─ The main server file. This receives requests, saves images,
+│      calls the AI agent, and sends back responses.
+│
+├── conversation_agent.py        
+│   └─ The AI logic. This file has a function that processes your
+│      message and image, and returns an answer.
+│
+├── uploads/                     
+│   └─ A folder created automatically. All uploaded images are
+│      saved here with unique names.
+│
+└── README.md                    
+    └─ This file - instructions for using the app.
 ```
 
-### File Descriptions
+## Understanding the Code
 
-- **main.py**: Core FastAPI application with route handlers
-- **conversation_agent.py**: AI logic for processing messages and images
-- **requirements.txt**: List of Python package dependencies
-- **.env**: Environment configuration (API keys, settings)
-- **uploads/**: Storage directory for user-uploaded images
-- **tests/**: Unit and integration tests
-- **docs/**: Extended documentation and guides
+### What happens step by step
 
-## ⚠️ Error Handling
+**When you send a request:**
 
-### Common Errors
+1. **The request arrives** at `main.py` in the `/chat` endpoint
+   - Your message (user_input)
+   - Your session ID (session_id) - optional
+   - Your image (image) - optional
 
-**File Too Large:**
-```json
-{
-  "detail": "File size exceeds maximum allowed size of 10MB"
-}
+2. **If you uploaded an image:**
+   - A unique filename is created using a UUID (a random ID)
+   - The file is saved to the `uploads/` folder
+   - Example: `uploads/550e8400-e29b-41d4-a716-446655440000_photo.jpg`
+
+3. **The AI agent is called:**
+   - Your message is sent to `conversation_agent()` function
+   - The image path is also sent (or `None` if no image)
+   - The agent processes everything and returns an answer
+
+4. **The response is prepared:**
+   - The answer from the agent is put into a dictionary
+   - Your session ID is added to it
+   - Everything is sent back to you as JSON
+
+### main.py - What it does
+
 ```
-**Solution:** Reduce image size or compress before uploading
-
-**Invalid File Format:**
-```json
-{
-  "detail": "Invalid file format. Allowed: jpg, jpeg, png, gif, webp"
-}
-```
-**Solution:** Convert image to supported format
-
-**Missing Required Field:**
-```json
-{
-  "detail": [
-    {
-      "loc": ["body", "user_input"],
-      "msg": "field required",
-      "type": "value_error.missing"
-    }
-  ]
-}
-```
-**Solution:** Include `user_input` in request
-
-**Session Not Found:**
-```json
-{
-  "detail": "Session expired or not found"
-}
-```
-**Solution:** Start new session or check session_id
-
-## 🔒 Security Considerations
-
-### File Upload Security
-
-1. **File Size Limit**: Implemented to prevent DoS attacks
-2. **File Type Validation**: Only allowed image formats accepted
-3. **UUID Naming**: Prevents directory traversal attacks
-4. **Separate Upload Directory**: Isolates user files
-
-### Best Practices
-
-```python
-# Add file validation
-from PIL import Image
-
-def validate_image(file_path):
-    try:
-        img = Image.open(file_path)
-        img.verify()
-        return True
-    except:
-        return False
-
-# Add rate limiting
-from slowapi import Limiter
-from slowapi.util import get_remote_address
-
-limiter = Limiter(key_func=get_remote_address)
-app.state.limiter = limiter
-
-@app.post("/chat")
-@limiter.limit("10/minute")
-async def chat(...):
-    # ...existing code...
+1. Imports required libraries (FastAPI, uuid, os, conversation_agent)
+2. Creates a FastAPI app
+3. Creates an "uploads" folder if it doesn't exist
+4. Defines a /chat endpoint that:
+   a. Takes three parameters: user_input, session_id, and image
+   b. If image exists:
+      - Generates a unique filename with uuid
+      - Saves the image to the uploads folder
+      - Stores the file path
+   c. Calls conversation_agent with the message and image path
+   d. Adds the session_id to the response
+   e. Returns the result
 ```
 
-### Environment Variables
+### conversation_agent.py - What it does
 
-Never commit `.env` file. Use `.env.example`:
+This file contains the logic that actually processes your message. It:
 
-```env
-ANTHROPIC_API_KEY=your_key_here
-OPENAI_API_KEY=your_key_here
-MAX_UPLOAD_SIZE=10485760
-SECRET_KEY=generate_random_secret_key
+```
+1. Receives your user_input (the message)
+2. Receives image_path (path to uploaded image, or None)
+3. Does some kind of processing:
+   - Analyzes the text
+   - If there's an image, analyzes that too
+   - Uses AI to generate a response
+4. Returns a dictionary with:
+   - "response": The answer text
+   - Any other information you want to include
 ```
 
-## 🚀 Performance
+### What happens with images
 
-### Optimization Tips
-
-1. **Enable Gzip Compression:**
-```python
-from fastapi.middleware.gzip import GZipMiddleware
-app.add_middleware(GZipMiddleware, minimum_size=1000)
+```
+1. You send an image with your message
+2. FastAPI saves it with a unique name in the uploads/ folder
+3. The file path is passed to the conversation_agent
+4. The agent can read and analyze the image
+5. The agent uses the image analysis in its response
+6. The image file stays saved in the uploads/ folder
 ```
 
-2. **Use Multiple Workers:**
-```bash
-uvicorn main:app --workers 4
-```
+## Common Questions
 
-3. **Implement Caching:**
-```python
-from functools import lru_cache
+**Q: What's a session_id?**
+A: It's just a name for your conversation. If you always use the same session_id, the agent can remember context from previous messages in that conversation.
 
-@lru_cache(maxsize=100)
-def process_image(image_path: str):
-    # ...existing code...
-```
+**Q: Where are my images saved?**
+A: In the `uploads/` folder in your project directory. Each image gets a unique name so they don't overwrite each other.
 
-4. **Async File Operations:**
-```python
-import aiofiles
+**Q: What formats can I upload?**
+A: Depends on your conversation_agent.py file, but usually jpg, png, gif, webp work.
 
-async with aiofiles.open(image_path, "wb") as f:
-    await f.write(await image.read())
-```
+**Q: How do I stop the server?**
+A: Press Ctrl+C in the terminal where it's running.
 
-### Benchmarks
-
-| Metric | Value |
-|--------|-------|
-| Average Response Time | 200-500ms |
-| Requests/Second | 100-200 |
-| Memory Usage | 50-100MB |
-| Image Upload Time | 100-300ms |
-
-## 🧪 Testing
-
-### Run Tests
-
-```bash
-# Install test dependencies
-pip install pytest pytest-asyncio httpx
-
-# Run all tests
-pytest
-
-# Run with coverage
-pytest --cov=. --cov-report=html
-
-# Run specific test file
-pytest tests/test_main.py -v
-```
-
-### Example Test
-
-```python
-# tests/test_main.py
-from fastapi.testclient import TestClient
-from main import app
-
-client = TestClient(app)
-
-def test_chat_text_only():
-    response = client.post(
-        "/chat",
-        data={
-            "user_input": "Hello",
-            "session_id": "test123"
-        }
-    )
-    assert response.status_code == 200
-    assert "response" in response.json()
-    assert response.json()["session_id"] == "test123"
-
-def test_chat_with_image():
-    with open("test_image.jpg", "rb") as img:
-        response = client.post(
-            "/chat",
-            data={"user_input": "Analyze this"},
-            files={"image": ("test.jpg", img, "image/jpeg")}
-        )
-    assert response.status_code == 200
-    assert "image_processed" in response.json()
-```
-
-## 🌐 Deployment
-
-### Docker Deployment
-
-**Dockerfile:**
-```dockerfile
-FROM python:3.11-slim
-
-WORKDIR /app
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY . .
-
-RUN mkdir -p uploads
-
-EXPOSE 8000
-
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
-```
-
-**docker-compose.yml:**
-```yaml
-version: '3.8'
-
-services:
-  api:
-    build: .
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./uploads:/app/uploads
-    environment:
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-    restart: unless-stopped
-```
-
-**Deploy:**
-```bash
-docker-compose up -d
-```
-
-### Cloud Deployment
-
-**AWS (EC2):**
-```bash
-# Install dependencies
-sudo apt update
-sudo apt install python3-pip
-
-# Clone and setup
-git clone <repo-url>
-cd Oregent-1
-pip3 install -r requirements.txt
-
-# Run with systemd
-sudo nano /etc/systemd/system/oregent.service
-```
-
-**Heroku:**
-```bash
-# Create Procfile
-echo "web: uvicorn main:app --host=0.0.0.0 --port=${PORT}" > Procfile
-
-# Deploy
-heroku create oregent-chat
-git push heroku main
-```
-
-**Railway/Render:**
-- Connect GitHub repository
-- Set environment variables
-- Deploy automatically
-
-## 🔧 Troubleshooting
-
-### Issue: Port Already in Use
-
-```bash
-# Find process using port 8000
-netstat -ano | findstr :8000  # Windows
-lsof -i :8000                 # Linux/Mac
-
-# Kill process
-taskkill /PID <PID> /F        # Windows
-kill -9 <PID>                 # Linux/Mac
-```
-
-### Issue: Module Not Found
-
-```bash
-# Reinstall dependencies
-pip install --force-reinstall -r requirements.txt
-
-# Check virtual environment
-which python  # Should point to venv
-```
-
-### Issue: Upload Directory Permission Denied
-
-```bash
-# Linux/Mac
-chmod 755 uploads/
-
-# Windows
-# Right-click uploads folder > Properties > Security > Edit
-```
-
-### Issue: API Key Error
-
-```bash
-# Check .env file exists
-ls -la .env
-
-# Verify API key is set
-echo $ANTHROPIC_API_KEY  # Linux/Mac
-echo %ANTHROPIC_API_KEY%  # Windows
-```
-
-### Enable Debug Logging
-
-```python
-import logging
-
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
-
-@app.post("/chat")
-async def chat(...):
-    logger.debug(f"Received request: {user_input}")
-    # ...existing code...
-```
-
-## 🤝 Contributing
-
-We welcome contributions! Please follow these steps:
-
-1. **Fork the Repository**
-2. **Create Feature Branch**
-   ```bash
-   git checkout -b feature/amazing-feature
-   ```
-3. **Commit Changes**
-   ```bash
-   git commit -m "Add amazing feature"
-   ```
-4. **Push to Branch**
-   ```bash
-   git push origin feature/amazing-feature
-   ```
-5. **Open Pull Request**
-
-### Code Style
-
-- Follow PEP 8 guidelines
-- Use type hints
-- Add docstrings to functions
-- Write unit tests for new features
-
-```python
-def process_message(user_input: str, session_id: str) -> dict:
-    """
-    Process user message and generate response.
-    
-    Args:
-        user_input: The user's message text
-        session_id: Unique session identifier
-        
-    Returns:
-        Dictionary containing response and metadata
-    """
-    # ...existing code...
-```
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 📞 Contact
-
-- **Project Maintainer**: [Your Name]
-- **Email**: your.email@example.com
-- **GitHub**: https://github.com/yourusername/oregent-1
-- **Issues**: https://github.com/yourusername/oregent-1/issues
-
-## 🙏 Acknowledgments
-
-- FastAPI framework by Sebastián Ramírez
-- Anthropic Claude API
-- Python community
-
-## 📝 Changelog
-
-### Version 1.0.0 (2024-01-15)
-- Initial release
-- Basic chat functionality
-- Image upload support
-- Session management
-
-### Future Roadmap
-
-- [ ] Add user authentication
-- [ ] Implement WebSocket support for real-time chat
-- [ ] Add conversation history storage
-- [ ] Support for multiple AI models
-- [ ] Rate limiting and quota management
-- [ ] Admin dashboard
-- [ ] Batch processing support
-- [ ] Audio input support
+**Q: Can multiple people use this at the same time?**
+A: Yes! By default it handles one request at a time. To handle more, run it with workers: `uvicorn main:app --workers 4`
 
 ---
 
