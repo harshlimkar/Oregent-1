@@ -1,39 +1,18 @@
-import re
-
-def normalize_price(price):
-    """
-    Converts price like '₹1,999', 'Rs. 1999', None → int or None
-    """
-    if price is None:
-        return None
-    if isinstance(price, int):
-        return price
-    price = re.sub(r"[^\d]", "", str(price))
-    return int(price) if price else None
-
-
-def normalize_rating(rating):
-    """
-    Converts rating to float between 0 and 5
-    """
-    try:
-        rating = float(rating)
-        if 0 <= rating <= 5:
-            return rating
-    except:
-        pass
-    return None
-
-
 def normalize_product(product: dict) -> dict:
     """
-    Standardizes product fields
+    Normalize product structure across all sources
+    so downstream analysis is stable and predictable.
     """
+
     return {
-        "title": product.get("title"),
-        "price": normalize_price(product.get("price")),
-        "rating": normalize_rating(product.get("rating")),
-        "reviews": product.get("reviews", []),
-        "source": product.get("source", "unknown"),
-        "confidence": product.get("confidence", 0.5)
+        "title": str(product.get("title", "")).strip(),
+        "price": product.get("price"),
+        "rating": float(product.get("rating", 3.5)) if product.get("rating") else 3.5,
+        "reviews": product.get("reviews", []) or [],
+        "link": product.get("link"),
+        "source": product.get("source", "Unknown")
     }
+
+
+def normalize_products(products: list) -> list:
+    return [normalize_product(p) for p in products]

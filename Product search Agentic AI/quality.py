@@ -1,168 +1,88 @@
+"""
+quality.py
+----------
+Analyzes product quality using text-based signals
+(reviews, snippets, descriptions).
+"""
+
 import re
-from typing import List, Dict
-import spacy
 
-# -----------------------------
-# Safe spaCy load
-# -----------------------------
-def load_spacy():
-    try:
-        return spacy.load("en_core_web_sm")
-    except:
-        return spacy.blank("en")
 
-nlp = load_spacy()
+POSITIVE_WORDS = [
+    "best", "excellent", "great", "recommended", "top",
+    "reliable", "amazing", "good", "worth", "value"
+]
 
-# -----------------------------
-# Optional Ollama (safe)
-# -----------------------------
-def ask_ollama(prompt: str):
-    try:
-        import ollama
-        r = ollama.chat(
-            model="llama3",
-            messages=[{"role": "user", "content": prompt}]
-        )
-        return r["message"]["content"]
-    except:
-        return None
+NEGATIVE_WORDS = [
+    "bad", "poor", "worst", "issue", "problem",
+    "complaint", "damage", "fake"
+]
 
-# -----------------------------
-# Generic aspect keywords (category-agnostic)
-# -----------------------------
-ASPECTS = {
-    "performance": ["fast", "smooth", "accurate", "responsive"],
-    "durability": ["durable", "broken", "stopped", "long lasting"],
-    "comfort": ["comfortable", "fit", "grip", "lightweight"],
-    "quality": ["quality", "material", "build"],
-    "value": ["worth", "price", "value", "money"],
-    "battery": ["battery", "backup", "charge"]
+ASPECT_KEYWORDS = {
+    "battery": ["battery", "backup", "charge"],
+    "performance": ["performance", "fast", "smooth", "accurate"],
+    "design": ["design", "build", "comfortable", "look"],
+    "value": ["price", "value", "worth", "budget"]
 }
 
-POSITIVE = ["good", "great", "excellent", "amazing", "best", "nice"]
-NEGATIVE = ["bad", "poor", "worst", "issue", "problem", "broken"]
 
-# -----------------------------
-# Review cleaning
-# -----------------------------
-def clean_reviews(reviews: List[str]) -> List[str]:
-    cleaned = []
-    for r in reviews:
-        r = r.lower()
-        r = re.sub(r"[^a-z0-9\s]", " ", r)
-        r = re.sub(r"\s+", " ", r).strip()
-        if len(r) > 10:
-            cleaned.append(r)
-    return cleaned
+def analyze_text_quality(texts):
+    """
+    Given list of review/snippet texts, return:
+    - quality score
+    - key qualities
+    """
+    score = 0.4  # base score
+    aspects_found = set()
 
-# -----------------------------
-# Aspect sentiment analysis
-# -----------------------------
-def aspect_analysis(reviews: List[str]) -> Dict[str, float]:
-    score = {a: 0 for a in ASPECTS}
-    count = {a: 0 for a in ASPECTS}
+    for text in texts:
+        t = text.lower()
 
-    for r in reviews:
-        for aspect, keywords in ASPECTS.items():
-            if any(k in r for k in keywords):
-                count[aspect] += 1
-                if any(p in r for p in POSITIVE):
-                    score[aspect] += 1
-                if any(n in r for n in NEGATIVE):
-                    score[aspect] -= 1
+        for w in POSITIVE_WORDS:
+            if w in t:
+                score += 0.05
 
-    return {
-        a: (score[a] / count[a] if count[a] else 0)
-        for a in ASPECTS
-    }
+        for w in NEGATIVE_WORDS:
+            if w in t:
+                score -= 0.05
 
-# -----------------------------
-# Convert aspects → qualities (GENERIC)
-# -----------------------------
-def aspects_to_qualities(aspect_scores: Dict[str, float]) -> List[str]:
-    qualities = []
+        for aspect, keywords in ASPECT_KEYWORDS.items():
+            for k in keywords:
+                if k in t:
+                    aspects_found.add(aspect)
 
-    for aspect, val in aspect_scores.items():
-        if val > 0.35:
-            qualities.append(f"Strong {aspect.replace('_', ' ')}")
-        elif val < -0.35:
-            qualities.append(f"Weak {aspect.replace('_', ' ')}")
+    score = max(0.1, min(score, 0.95))
 
-    if not qualities:
-        qualities.append("Balanced overall quality")
+    return score, aspects_found
 
-    return qualities[:4]
 
-# -----------------------------
-# Generate rank explanation (GENERIC)
-# -----------------------------
-def generate_rank_reason(rank: int, product: dict, prev_product: dict | None):
-    if rank == 1:
-        return (
-            "This product ranks first because it has the highest overall quality score, "
-            "driven by strong performance across multiple quality aspects and consistently "
-            "positive user feedback."
-        )
-
-    if prev_product:
-        diff = round(prev_product["final_score"] - product["final_score"], 3)
-        return (
-            f"This product ranks #{rank} because its overall quality score is slightly "
-            f"lower than the higher-ranked option by {diff}. While it performs well, it shows "
-            f"comparatively fewer strong positive signals in certain quality aspects."
-        )
-
-    return f"This product ranks #{rank} due to moderate overall quality."
-
-# -----------------------------
-# Main ranking engine (GENERIC)
-# -----------------------------
-def rank_products(products: List[Dict], top_n: int = 10) -> List[Dict]:
+def rank_products(products, top_n=10):
     ranked = []
 
-    for p in products:
-        reviews = clean_reviews(p.get("reviews", []))
-        aspect_scores = aspect_analysis(reviews)
+    for product in products:
+        texts = product.get("reviews", [])
 
-        # Optional LLM signal
-        llm_score = 0.6
-        llm_text = ask_ollama(
-            f"Give an overall quality score between 0 and 1:\n{reviews[:8]}"
-        ) if reviews else None
+        score, aspects = analyze_text_quality(texts)
 
-        if llm_text:
-            for t in llm_text.split():
-                try:
-                    v = float(t)
-                    if 0 <= v <= 1:
-                        llm_score = v
-                        break
-                except:
-                    pass
-
-        rating_score = (p.get("rating") or 3.5) / 5
-        aspect_score = sum((v + 1) / 2 for v in aspect_scores.values()) / len(aspect_scores)
-
-        final_score = round(
-            0.4 * rating_score +
-            0.3 * aspect_score +
-            0.3 * llm_score,
-            3
-        )
+        if aspects:
+            reason = (
+                f"Strong performance in "
+                + ", ".join(sorted(aspects))
+                + " based on user feedback."
+            )
+        else:
+            reason = (
+                "Consistently positive mentions and balanced overall quality "
+                "across multiple sources."
+            )
 
         ranked.append({
-            **p,
-            "final_score": final_score,
-            "key_qualities": aspects_to_qualities(aspect_scores),
-            "aspect_scores": aspect_scores
+            "title": product["title"],
+            "link": product["link"],
+            "source": product["source"],
+            "final_score": round(score, 2),
+            "rank_reason": reason
         })
 
     ranked.sort(key=lambda x: x["final_score"], reverse=True)
-
-    output = []
-    for i, p in enumerate(ranked[:top_n]):
-        prev = ranked[i - 1] if i > 0 else None
-        p["rank_reason"] = generate_rank_reason(i + 1, p, prev)
-        output.append(p)
-
-    return output
+    return ranked[:top_n]
